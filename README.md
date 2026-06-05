@@ -108,8 +108,8 @@ Simulation autonome d'une plateforme e-commerce à haute intensité.
 
 ```bash
 # 1. Cloner le dépôt
-git clone https://github.com/bf-data-dv/geardata-optimization.git
-cd geardata-optimization
+git clone https://github.com/bf-data-dv/mon-portfolio-data.git
+cd mon-portfolio-data
 
 # 2. Installer les dépendances
 npm install
