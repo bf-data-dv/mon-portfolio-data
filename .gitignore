@@ -1,0 +1,37 @@
+# ==========================================
+# DEPENDANCES & BUILDS (REACT / NODE)
+# ==========================================
+**/node_modules/
+**/build/
+/portofoliodata/.pnp
+/portofoliodata/.pnp.js
+/portofoliodata/coverage
+
+# ==========================================
+# SECURITE : BLOCAGE DES FICHIERS .ENV (GLOBAL)
+# ==========================================
+# Cette règle bloque TOUS les fichiers .env, peu importe où ils se cachent
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+**/.env
+
+# ==========================================
+# PYTHON (DATA PIPELINE)
+# ==========================================
+**/__pycache__/
+*.pyc
+**/.venv/
+**/venv/
+**/env/
+
+# Exclure le dossier de packaging pour AWS Lambda
+**/lambda_package/
+
+# ==========================================
+# DIVERS & LOGS
+# ==========================================
+.DS_Store
+*.log*

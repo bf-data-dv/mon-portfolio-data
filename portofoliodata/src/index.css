@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+/* On force le scan de tout le projet pour ne rien rater */
+@source "../src/**/*.{js,jsx,ts,tsx}";
+
+@theme {
+  --color-indigo-500: #6366f1;
+  --color-slate-950: #0a0c14;
+}
+
+/* TEST VISUEL : Si le fond ne devient pas noir, c'est un problème d'import JS */
+@layer base {
+  body {
+    background-color: #0a0c14 !important;
+    color: white !important;
+  }
+}
