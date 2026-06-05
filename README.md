@@ -199,6 +199,8 @@ def lambda_handler(event, context):
         
     return {'statusCode': 200, 'body': "Factures archivées avec succès."}
 
+```    
+
 👤 Auteur
 
 Développé avec passion par Brahim Fettih — Certifié CDA (AFPA), admis à la Wild Code School et activement à la recherche d'une alternance en Data Engineering.
