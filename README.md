@@ -7,7 +7,7 @@
 
 > Système ERP-Light de gestion d'inventaire automobile avec pipeline de données serverless sur AWS — né de la centralisation et de la purification d'un catalogue de **3 000+ références véhicules**.
 
-**[🚀 Demo Live](https://geardata-engine.vercel.app/)** · **[📂 Code Source](https://github.com/bf-data-dv/geardata-optimization)**
+**[🚀 Demo Live](https://mon-portfolio-data.vercel.app/)** · **[📂 Code Source](https://github.com/bf-data-dv/mon-portfolio-data)**
 
 ---
 
@@ -62,6 +62,23 @@ L'écosystème applique les patterns industriels de séparation OLTP / Orchestra
 | **Abstraction** | Database Layer | **SQL Views** | Abstraction des requêtes lourdes via la vue optimisée `global_inventory_stock`. |
 | **Client** | ERP App | **React.js + Chart.js** | Consommation sécurisée (RBAC), monitoring des ventes et reporting d'approvisionnement. |
 
+## 🏗️ Visualisation de l'infrastructure
+
+<p align="center">
+  <strong>Schéma d'architecture</strong><br>
+  <img src="assets/architecture_schema.png" width="700" alt="Architecture">
+</p>
+
+<p align="center">
+  <strong>Dashboard ERP</strong><br>
+  <img src="assets/dashboard_preview.png" width="700" alt="Dashboard">
+</p>
+
+<p align="center">
+  <strong>Structure Data Lake (Partitionnement Hive)</strong><br>
+  <img src="assets/s3_partitioning.png" width="700" alt="S3 Structure">
+</p>
+
 ---
 
 ## Pipelines Python
@@ -74,7 +91,7 @@ Déployé sur AWS sous le **principe de moindre privilège IAM**.
 
 - **Fenêtre glissante** : calcul dynamique `datetime.now(UTC) - timedelta(hours=1)` pour capturer uniquement les mutations de la dernière heure, sans surcharge réseau.
 - **Jointure relationnelle à la source** : récupération combinée des ventes + tables liées (`inventory`, `qualites_tapis`) en une seule passe API.
-- **Partitionnement Hive sur S3** : structuration automatique du chemin `raw/ventes/annee=YYYY/mois=MM/jour=DD/` pour l'indexation analytique.
+- **Partitionnement Hive sur S3 : structuration automatique du chemin raw/ventes/annee=YYYY/mois=MM/jour=DD/. Ce partitionnement type Hive est stratégique : il permet une indexation analytique performante et facilite le requêtage direct via des outils comme AWS Athena ou AWS Glue pour générer des rapports métier sans extraire toute la donnée.
 
 ### 2. Alignement & Uniformisation d'Inventaire · `reset_and_uniformize.py`
 
@@ -164,55 +181,312 @@ Pour transformer cet ERP-Light en une plateforme e-commerce totalement autonome,
 ### 📝 Prototype de la Lambda de Facturation (`facturation_service.py`)
 
 ```python
-import os
 import json
 import boto3
+import os
+import urllib.parse
+from datetime import datetime
 from fpdf import FPDF
 
-s3_client = boto3.client('s3')
-BUCKET_FACTURES = "brahim-factures-storage-2026"
+# Initialisation du client S3
+s3 = boto3.client('s3')
+
+def nettoyer_texte(texte):
+    """Remplace les caractères spéciaux/exotiques par leurs équivalents standards"""
+    if not isinstance(texte, str):
+        return texte
+    replacements = {
+        "—": "-", "–": "-", "’": "'", "…": "...", "€": "EUR"
+    }
+    for old, new in replacements.items():
+        texte = texte.replace(old, new)
+    return texte
 
 def lambda_handler(event, context):
-    # Récupération de l'objet JSON entrant
-    bucket_source = event['Records'][0]['s3']['bucket']['name']
-    cle_json = event['Records'][0]['s3']['object']['key']
+    try:
+        bucket = event['Records'][0]['s3']['bucket']['name']
+        key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'])
+        
+        if not key.startswith("raw/ventes/"):
+            return {'statusCode': 200, 'body': "Ignoré"}
+
+        parts = key.split('/')
+        year = parts[2].split('=')[1]
+        month = parts[3].split('=')[1]
+        day = parts[4].split('=')[1]
+        
+        reponse_s3 = s3.get_object(Bucket=bucket, Key=key)
+        contenu_json = json.loads(reponse_s3['Body'].read().decode('utf-8'))
+        
+        for vente in contenu_json:
+            nom_pdf = generer_facture(vente)
+            filename = os.path.basename(nom_pdf)
+            
+            target_key = f"raw/factures/annee={year}/mois={month}/jour={day}/{filename}"
+            
+            with open(nom_pdf, "rb") as f:
+                s3.put_object(
+                    Bucket=bucket,
+                    Key=target_key,
+                    Body=f,
+                    ContentType='application/pdf'
+                )
+            os.remove(nom_pdf)
+            
+        return {'statusCode': 200, 'body': "Succès"}
+    except Exception as e:
+        print(f"Erreur : {str(e)}")
+        return {'statusCode': 500, 'body': str(e)}
+
+
+class FacturePDF(FPDF):
+    """Classe personnalisée pour héberger la structure globale de la facture"""
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Helvetica", 'I', 8)
+        self.set_text_color(148, 163, 184)
+        self.cell(0, 10, f"Page {self.page_no()}/{{nb}}", align='C')
+        self.set_y(-20)
+        self.cell(0, 10, "TapisAuto ERP - Capital de 10 000 EUR - SIRET 123 456 789 00012", align='C')
+
+
+def generer_facture(vente):
+    vente_id = vente.get("id", "unknown")
+    date_brute = vente.get("created_at", datetime.now().isoformat())
     
-    reponse = s3_client.get_object(Bucket=bucket_source, Key=cle_json)
-    ventes_data = json.loads(reponse['Body'].read().decode('utf-8'))
+    try:
+        date_obj = datetime.strptime(date_brute.split("T")[0], "%Y-%m-%d")
+        date_facture = date_obj.strftime("%d/%m/%Y")
+    except Exception:
+        date_facture = datetime.now().strftime("%d/%m/%Y")
+        
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    nom_fichier = f"/tmp/facture_{vente_id}_{timestamp}.pdf"
     
-    for vente in ventes_data:
-        id_vente = vente.get('id', 'UNKNOWN')
+    profil = vente.get("profiles", {})
+    inventory = vente.get("inventory", {})
+    qualite = vente.get("qualites_tapis", {})
+    items = vente.get("items", [])
+    
+    marque = nettoyer_texte(inventory.get("marque", "N/A")).upper()
+    modele = nettoyer_texte(inventory.get("modele_voiture", "N/A"))
+    
+    pdf = FacturePDF()
+    pdf.alias_nb_pages()
+    pdf.add_page()
+    
+    # ─── EN-TÊTE CORPORATE AVEC LOGO ET TEXTE À DROITE ───────────────────────
+    if os.path.exists('logo.png'):
+        pdf.image('logo.png', 10, 10, 25) # Logo réduit à 25mm
+        pdf.set_x(40) # On décale le texte à droite du logo (25+15 de marge)
+        pdf.set_y(10)
         
-        # Génération du PDF en mémoire
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Helvetica", "B", 16)
-        pdf.cell(40, 10, f"FACTURE N° FAC-{id_vente}")
+        # Le titre "TapisAuto" en bleu a été retiré ici
         
-        # Sauvegarde temporaire locale à la Lambda
-        chemin_local = f"/tmp/facture_{id_vente}.pdf"
-        pdf.output(chemin_local)
+        pdf.set_font("Helvetica", size=9)
+        pdf.set_text_color(100, 116, 139)
+        pdf.cell(100, 4, "TapisAuto SAS", ln=True, x=40)
+        pdf.set_x(40)
+        pdf.cell(100, 4, "15 Rue de l'Innovation", ln=True)
+        pdf.set_x(40)
+        pdf.cell(100, 4, "59100 Roubaix, France", ln=True)
+        pdf.set_x(40)
+        pdf.cell(100, 4, "contact@tapisauto.fr", ln=True)
+        pdf.set_y(35) # Repositionnement sous le bloc en-tête
+    else:
+        pdf.set_y(12)
+        pdf.set_font("Helvetica", 'B', 22)
+        pdf.set_text_color(79, 70, 229)
+        pdf.cell(100, 10, "TapisAuto", ln=False)
+        pdf.set_y(22)
         
-        # Archivage permanent sur S3
-        cle_s3 = f"factures/annee=2026/facture_{id_vente}.pdf"
-        s3_client.upload_file(chemin_local, BUCKET_FACTURES, cle_s3)
+    # Métadonnées Facture (Alignement à droite)
+    pdf.set_y(12)
+    pdf.set_x(120)
+    pdf.set_font("Helvetica", 'B', 20)
+    pdf.set_text_color(30, 41, 59)
+    pdf.cell(80, 10, "FACTURE", ln=True, align='R')
+    pdf.set_font("Helvetica", size=10)
+    pdf.set_text_color(100, 116, 139)
+    pdf.set_x(120)
+    pdf.cell(80, 5, f"Référence : FAC-{vente_id}", ln=True, align='R')
+    pdf.set_x(120)
+    pdf.cell(80, 5, f"Date d'émission : {date_facture}", ln=True, align='R')
+    
+    pdf.ln(12)
+    
+    # ─── BLOC CLIENT ──────────────────────────────────────────────────
+    pdf.set_fill_color(248, 250, 252)
+    pdf.set_draw_color(226, 232, 240)
+    pdf.rect(10, pdf.get_y(), 190, 30, 'DF')
+    pdf.set_y(pdf.get_y() + 3)
+    pdf.set_x(14)
+    pdf.set_font("Helvetica", 'B', 10)
+    pdf.set_text_color(79, 70, 229)
+    pdf.cell(180, 5, "DESTINATAIRE", ln=True)
+    pdf.set_font("Helvetica", size=10)
+    pdf.set_text_color(30, 41, 59)
+    
+    prenom = nettoyer_texte(profil.get('first_name', 'Client')).capitalize()
+    nom = nettoyer_texte(profil.get('last_name', 'Visiteur')).upper()
+    num_rue = nettoyer_texte(profil.get('address_number', ''))
+    rue = nettoyer_texte(profil.get('address_street', 'Adresse inconnue'))
+    cp = profil.get('zip_code', '')
+    ville = nettoyer_texte(profil.get('city', '')).upper()
+    
+    pdf.set_x(14)
+    pdf.cell(180, 5, f"{prenom} {nom}", ln=True)
+    pdf.set_x(14)
+    pdf.cell(180, 5, f"{num_rue} {rue}", ln=True)
+    pdf.set_x(14)
+    pdf.cell(180, 5, f"{cp} {ville}", ln=True)
+    pdf.set_y(pdf.get_y() + 12)
+    
+    # ─── TABLEAU DES ARTICLES ────────────────────────────────────────────────
+    pdf.set_fill_color(30, 41, 59)
+    pdf.set_draw_color(30, 41, 59)
+    pdf.set_font("Helvetica", 'B', 9)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(90, 8, " Description du produit", 1, 0, 'L', True)
+    pdf.cell(25, 8, "Finition", 1, 0, 'C', True)
+    pdf.cell(15, 8, "Qté", 1, 0, 'C', True)
+    pdf.cell(30, 8, "Prix Unit. HT", 1, 0, 'C', True)
+    pdf.cell(30, 8, "Total HT", 1, 1, 'C', True)
+    
+    pdf.set_font("Helvetica", '', 9)
+    pdf.set_text_color(51, 65, 85)
+    total_ht = 0
+    alterner_fond = False
+    
+    for item in items:
+        libelle = "Pack Tapis Avant"
+        if item.get("avec_arriere"): libelle += " + Arriere"
+        if item.get("avec_coffre"): libelle += " + Coffre"
+        nom_complet = f"{libelle}\n({marque} {modele})"
+        prix_ttc_unitaire = float(item.get("prix_base", 0)) + float(item.get("prix_arriere", 0) if item.get("avec_arriere") else 0) + float(item.get("prix_coffre", 0) if item.get("avec_coffre") else 0)
+        prix_ht_unitaire = prix_ttc_unitaire / 1.20
+        qte = item.get("quantite", 0)
+        ligne_ht = qte * prix_ht_unitaire
+        total_ht += ligne_ht
         
-    return {'statusCode': 200, 'body': "Factures archivées avec succès."}
+        pdf.set_fill_color(248, 250, 252) if alterner_fond else pdf.set_fill_color(255, 255, 255)
+        current_x, current_y = pdf.get_x(), pdf.get_y()
+        pdf.rect(current_x, current_y, 90, 12, 'F')
+        pdf.multi_cell(90, 6, f" {nom_complet}", border=0, align='L', fill=True)
+        pdf.set_xy(current_x + 90, current_y)
+        pdf.cell(25, 12, nettoyer_texte(qualite.get("nom", "Classique")).capitalize(), border='B', align='C', fill=True)
+        pdf.cell(15, 12, str(qte), border='B', align='C', fill=True)
+        pdf.cell(30, 12, f"{prix_ht_unitaire:.2f} EUR", border='B', align='R', fill=True)
+        pdf.cell(30, 12, f"{ligne_ht:.2f} EUR", border='B', align='R', fill=True)
+        pdf.set_y(current_y + 12)
+        alterner_fond = not alterner_fond
+        
+    pdf.ln(6)
+    pdf.set_x(110)
+    pdf.set_font("Helvetica", '', 10)
+    pdf.cell(50, 7, "Total HT", 0, 0, 'R')
+    pdf.cell(40, 7, f"{total_ht:.2f} EUR", 0, 1, 'R')
+    pdf.set_x(110)
+    pdf.cell(50, 7, "TVA (20%)", 0, 0, 'R')
+    pdf.cell(40, 7, f"{total_ht * 0.20:.2f} EUR", 0, 1, 'R')
+    pdf.ln(2)
+    pdf.set_x(110)
+    pdf.set_fill_color(79, 70, 229)
+    pdf.set_font("Helvetica", 'B', 11)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(50, 10, "TOTAL TTC ", 0, 0, 'R', True)
+    pdf.cell(40, 10, f"{total_ht * 1.20:.2f} EUR ", 0, 1, 'R', True)
+    
+    pdf.output(nom_fichier)
+    return nom_fichier
 
 ```    
 
-💼 Accès Recruteur / Version Démo :
+## Aperçu du rendu
+Voici à quoi ressemble une facture générée par le système :
 
-Pour explorer l'interface d'administration et le dashboard temps réel sans altérer le catalogue de production, utilisez les identifiants suivants :
+<p align="center">
+  <img src="assets/exemple_facture.png" width="600" alt="Exemple de facture PDF">
+</p>
 
-    Identifiant : recruteur@tapisauto.fr
+---
 
-    Mot de passe : WelcomeData2026!
+## Fonctionnement
+- Le système détecte le JSON dans le bucket `raw/ventes/`.
+- La fonction Lambda traite les données.
+- Le PDF final est déposé dans `raw/factures/`.
 
-    (Note : Conformément aux bonnes pratiques de Data Engineering, les droits d'écriture (INSERT/UPDATE/DELETE) sont bridés au niveau de la base de données via des règles PostgreSQL RLS).
+💼 Accès Recruteur / Version Démo
+
+Pour explorer l'interface d'administration, interagir avec le dashboard temps réel et tester le tunnel utilisateur sans altérer l'inventaire de production, vous pouvez utiliser le compte de test suivant :
+
+    🌐 Lien de l'application : https://mon-portfolio-data.vercel.app
+
+    🔑 Identifiant Admin : recruteur@tapisauto.fr
+
+    🔒 Mot de passe : WelcomeData2026!
+
+    🔑 Identifiant Utilisateur : visiteur@tapisauto.fr
+
+    🔒 Mot de passe : Visiteur2026!
+
+    ⚠️ Note sur la sécurité du mode démo : Conformément aux bonnes pratiques de Data Engineering et pour préserver l'intégrité de la base de données, les actions sensibles d'écriture (INSERT/UPDATE/DELETE) ainsi que la validation finale du panier ont été sécurisées et bridées spécifiquement pour ce compte d'inspection. Pour tester le tunnel d'achat complet sans restriction sur les stocks, veuillez utiliser le profil visiteur mis à disposition sur l'interface de connexion.
+
+ 📊 Documentation Visuelle du Système
+
+Voici un aperçu de l'infrastructure, du monitoring et des fonctionnalités de l'ERP.
+
+1. Architecture & Data Engineering
+
+Le pipeline repose sur une architecture serverless robuste, avec un partitionnement Hive pour une gestion optimisée des données.
+
+<p align="center">
+  <img src="assets/architecture_schema.png" width="700" alt="Architecture">
+  <br>
+  <em><strong>Schéma d'architecture :</strong> Flux ETL automatisé entre Supabase et le Data Lake S3.</em>
+</p>
+
+<p align="center">
+  <img src="assets/s3_partitioning.png" width="700" alt="S3 Structure">
+  <br>
+  <em><strong>Partitionnement S3 :</strong> Organisation selon le standard Hive (annee/mois/jour) pour une indexation analytique performante.</em>
+</p>
+
+2. Console d'Administration (Monitoring & ERP)
+
+L'interface d'administration permet un pilotage en temps réel des flux de données et des stocks.
+
+<div align="center">
+  <table border="0">
+    <tr>
+      <td><img src="assets/page_dashboard_admin.png" width="350" alt="Dashboard Global"></td>
+      <td><img src="assets/page_dashboard_admin2.png" width="350" alt="Monitoring Flux"></td>
+    </tr>
+    <tr>
+      <td><img src="assets/page_dashboard_admin3.png" width="350" alt="Alerting Stocks"></td>
+      <td><img src="assets/page_dashboard_admin4.png" width="350" alt="Query Ledger"></td>
+    </tr>
+  </table>
+  <em><strong>Console Admin :</strong> Vue d'ensemble des KPIs, monitoring des flux "Live", système d'alerting sur stocks critiques, et traçabilité SQL intégrée.</em>
+</div>
+
+3. Interface Utilisateur (Frontend)
+
+Une expérience simplifiée pour la navigation dans le catalogue automobile. 
+
+<p align="center">
+  <img src="assets/page_accueil_utilisateur_connecté.png" width="350" alt="Accueil Client">
+  <img src="assets/page_catalogue_utilisateur_connecté.png" width="350" alt="Catalogue">
+  <br>
+  <em><strong>Interface Client :</strong> Vue d'accueil personnalisée et navigation structurée dans le catalogue de produits.</em>
+</p>
 
 👤 Auteur
 
-Développé avec passion par Brahim Fettih — Certifié CDA (AFPA), admis à la Wild Code School et activement à la recherche d'une alternance en Data Engineering.
+Développé avec passion par Brahim Fettih — Concepteur Développeur d'Applications (CDA) diplômé de l'AFPA, admis à la Wild Code School et activement à la recherche d'une alternance en Data Engineering.
 
-[![GitHub](https://img.shields.io/badge/GitHub-bf--data--dv-181717?style=flat-square&logo=github)](https://github.com/bf-data-dv)
+### 🛠️ Compétences clés mises en œuvre
+* **Cloud Architecture** : AWS (Lambda, S3, EventBridge, IAM).
+* **Data Engineering** : Pipeline ETL, Delta-loading, Partitionnement de Data Lake (Hive).
+* **Backend & Automatisation** : Python, Boto3, Génération PDF dynamique.
+* **Fullstack** : React.js, Supabase (PostgreSQL), Gestion RBAC.
