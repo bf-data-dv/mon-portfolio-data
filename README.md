@@ -201,6 +201,16 @@ def lambda_handler(event, context):
 
 ```    
 
+💼 Accès Recruteur / Version Démo :
+
+Pour explorer l'interface d'administration et le dashboard temps réel sans altérer le catalogue de production, utilisez les identifiants suivants :
+
+    Identifiant : recruteur@tapisauto.fr
+
+    Mot de passe : WelcomeData2026!
+
+    (Note : Conformément aux bonnes pratiques de Data Engineering, les droits d'écriture (INSERT/UPDATE/DELETE) sont bridés au niveau de la base de données via des règles PostgreSQL RLS).
+
 👤 Auteur
 
 Développé avec passion par Brahim Fettih — Certifié CDA (AFPA), admis à la Wild Code School et activement à la recherche d'une alternance en Data Engineering.

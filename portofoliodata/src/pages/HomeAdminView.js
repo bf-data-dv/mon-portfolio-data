@@ -50,7 +50,11 @@ ChartJS.register(
  * @param {number} totalRowsInDB   - Nombre total de références dans inventory
  * @param {array}  lowStockItems   - Articles avec au moins un stock de tapis ≤ 4 unités
  */
-const HomeAdminView = ({ grandTotal, totalRowsInDB, lowStockItems = [] }) => {
+
+const HomeAdminView = ({ grandTotal, totalRowsInDB, lowStockItems = [], session }) => {
+
+ // 🕵️‍♂️ Extraction de l'email de l'utilisateur connecté
+  const userEmail = session?.user?.email;
 
   // Index de la requête SQL affichée dans le carrousel "Query Ledger"
   const [sqlIndex, setSqlIndex] = useState(0);
@@ -306,7 +310,16 @@ const HomeAdminView = ({ grandTotal, totalRowsInDB, lowStockItems = [] }) => {
   // de re-fetch complexe. C'est acceptable pour une action ponctuelle
   // d'administration qui ne nécessite pas une UX ultra-fluide.
   // ─────────────────────────────────────────────
-  const handleUpdateStock = async (id, newCounts) => {
+const handleUpdateStock = async (id, newCounts) => {
+
+  console.log("Email détecté par le composant :", userEmail);
+    // 🛑 VERROU DE SÉCURITÉ : Bloquer l'écriture pour le compte démo recruteur
+    if (userEmail === 'recruteur@tapisauto.fr') {
+      alert("🔒 Mode Démo : La modification des stocks est désactivée pour ce compte de test afin de protéger la base de données.");
+      setSelectedItem(null); // On ferme la modale proprement
+      return; // On stoppe l'action ici, Supabase n'est pas appelé
+    }
+
     try {
       const { error } = await supabase
         .from('carpet_stock')

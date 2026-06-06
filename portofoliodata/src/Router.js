@@ -135,6 +135,7 @@ const AppRouter = ({
             onUpdateOptions={onUpdateOptions}
             onClearCart={onClearCart}
             onBack={() => navigate(-1)}
+            session={session}
           />
         }
       />
@@ -169,6 +170,7 @@ const AppRouter = ({
                 totalRowsInDB={totalRowsInDB}
                 grandTotal={grandTotal}
                 lowStockItems={lowStockItems}
+                session={session}
               />
             }
           />

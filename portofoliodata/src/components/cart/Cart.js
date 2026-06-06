@@ -7,7 +7,7 @@ import { supabase } from '../../services/SupabaseClient';
  * Gère l'affichage du panier, la modification des quantités/options,
  * et la validation finale de la commande avec mise à jour du stock et historique des ventes.
  */
-const Cart = ({ cart, onRemoveItem, onUpdateQuantity, onUpdateOptions, onBack, onClearCart }) => {
+const Cart = ({ cart, onRemoveItem, onUpdateQuantity, onUpdateOptions, onBack, onClearCart, session }) => { // 👈 On ajoute session ici
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
@@ -49,6 +49,12 @@ const sendToS3Lambda = async (venteData) => {
   const handleCheckout = async () => {
     if (cart.length === 0) return;
     
+    // 🛑 VERROU DE SÉCURITÉ : Empêcher le compte recruteur admin de passer une commande
+    if (session?.user?.email === 'recruteur@tapisauto.fr') {
+      alert("🔒 Mode Démo : La validation du panier est désactivée pour ce compte de test afin de préserver l'état de l'inventaire et des stocks. Connectez-vous avec le compte visiteur pour tester le tunnel d'achat complet !");
+      return; // On stoppe l'exécution immédiatement, aucune requête n'est envoyée à Supabase/S3
+    }
+
     try {
       setIsSubmitting(true);
 
