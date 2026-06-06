@@ -312,7 +312,7 @@ const HomeAdminView = ({ grandTotal, totalRowsInDB, lowStockItems = [], session 
   // ─────────────────────────────────────────────
 const handleUpdateStock = async (id, newCounts) => {
 
-  console.log("Email détecté par le composant :", userEmail);
+
     // 🛑 VERROU DE SÉCURITÉ : Bloquer l'écriture pour le compte démo recruteur
     if (userEmail === 'recruteur@tapisauto.fr') {
       alert("🔒 Mode Démo : La modification des stocks est désactivée pour ce compte de test afin de protéger la base de données.");
