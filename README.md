@@ -62,23 +62,6 @@ L'écosystème applique les patterns industriels de séparation OLTP / Orchestra
 | **Abstraction** | Database Layer | **SQL Views** | Abstraction des requêtes lourdes via la vue optimisée `global_inventory_stock`. |
 | **Client** | ERP App | **React.js + Chart.js** | Consommation sécurisée (RBAC), monitoring des ventes et reporting d'approvisionnement. |
 
-## 🏗️ Visualisation de l'infrastructure
-
-<p align="center">
-  <strong>Schéma d'architecture</strong><br>
-  <img src="assets/architecture_schema.png" width="700" alt="Architecture">
-</p>
-
-<p align="center">
-  <strong>Dashboard ERP</strong><br>
-  <img src="assets/dashboard_preview.png" width="700" alt="Dashboard">
-</p>
-
-<p align="center">
-  <strong>Structure Data Lake (Partitionnement Hive)</strong><br>
-  <img src="assets/s3_partitioning.png" width="700" alt="S3 Structure">
-</p>
-
 ---
 
 ## Pipelines Python
