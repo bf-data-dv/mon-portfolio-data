@@ -24,5 +24,12 @@ if (!supabaseUrl || !supabaseKey) {
  * Objet : 'supabase' devient le connecteur unique (Singleton) réutilisable partout dans l'application.
  * Il intègre par défaut la gestion des en-têtes d'authentification anonymes (Anon Key) permettant
  * à la base de données d'appliquer les politiques de sécurité par ligne (Row Level Security - RLS).
+ * * NOTE : L'ajout de global.fetch résout les erreurs de résolution réseau dans certains environnements 
+ * de build React (resolveFetch).
  */
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  global: {
+    // Liaison explicite au fetch natif du navigateur pour éviter les erreurs de résolution
+    fetch: typeof window !== 'undefined' ? window.fetch.bind(window) : fetch,
+  },
+});

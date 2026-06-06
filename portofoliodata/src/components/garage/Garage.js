@@ -1,19 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../../services/SupabaseClient';
 import { Trash2, Car, Loader2, Plus, ArrowRight } from 'lucide-react';
 
+/**
+ * Composant Garage
+ * Rôle : Affiche les véhicules favoris de l'utilisateur (Collection Privée).
+ * Permet de consulter les détails et de supprimer un véhicule du garage (table 'user_garage').
+ */
 const Garage = ({ session, setActiveTab }) => {
   const [myCars, setMyCars] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 1. Chargement des données au montage du composant
-  useEffect(() => {
-    if (session?.user?.id) {
-      fetchGarage();
-    }
-  }, [session]);
-
-  const fetchGarage = async () => {
+  /**
+   * MEMOISATION : useCallback garantit que la fonction fetchGarage est stable.
+   * Cela évite les redéclenchements inutiles et satisfait les règles de dépendances d'useEffect.
+   */
+  const fetchGarage = useCallback(async () => {
+    if (!session?.user?.id) return;
+    
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -38,7 +42,12 @@ const Garage = ({ session, setActiveTab }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session?.user?.id]);
+
+  // 1. Chargement des données au montage du composant
+  useEffect(() => {
+    fetchGarage();
+  }, [fetchGarage]);
 
   // 2. Fonction pour supprimer une voiture du garage
   const removeFromGarage = async (garageEntryId) => {

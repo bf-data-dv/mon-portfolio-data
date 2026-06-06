@@ -1,8 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../services/SupabaseClient';
 import { ChevronLeft, Search, Car, ChevronRight, Heart, Medal } from 'lucide-react';
 import { useFavorites } from '../../hooks/useFavorites';
 
+/**
+ * Composant ModelListView
+ * Rôle : Affiche la liste des modèles pour une marque donnée.
+ * Gère la recherche textuelle, le filtrage par catégorie (Collection, Youngtimer, Récente)
+ * et l'ajout aux favoris (Garage).
+ */
 const ModelListView = ({ brand, activeFilter, onModelSelect, onBack, session, onFilterChange }) => {
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -11,11 +17,11 @@ const ModelListView = ({ brand, activeFilter, onModelSelect, onBack, session, on
 
   const { garageIds, toggleFavorite } = useFavorites(session?.user?.id);
 
-  useEffect(() => {
-    fetchModels();
-  }, [brand]);
-
-  const fetchModels = async () => {
+  /**
+   * MEMOISATION : useCallback garantit que la fonction fetchModels est stable 
+   * et ne provoque pas de re-déclenchements inutiles du useEffect.
+   */
+  const fetchModels = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('inventory')
@@ -25,8 +31,15 @@ const ModelListView = ({ brand, activeFilter, onModelSelect, onBack, session, on
 
     if (!error) setModels(data);
     setLoading(false);
-  };
+  }, [brand]);
 
+  useEffect(() => {
+    fetchModels();
+  }, [fetchModels]);
+
+  /**
+   * UTILITAIRE : Détermine la catégorie du véhicule en fonction de son année
+   */
   const getBadgeConfig = (startDate) => {
     if (!startDate) return null;
     const year = new Date(startDate).getFullYear();
@@ -51,6 +64,9 @@ const ModelListView = ({ brand, activeFilter, onModelSelect, onBack, session, on
     }
   };
 
+  /**
+   * FILTRAGE : Applique la recherche textuelle et le filtre de badge actif
+   */
   const filteredModels = models.filter(m => {
     const matchesSearch = m.modele_voiture?.toLowerCase().includes(searchTerm.toLowerCase());
     const badge = getBadgeConfig(m.year_start);
@@ -84,7 +100,6 @@ const ModelListView = ({ brand, activeFilter, onModelSelect, onBack, session, on
 
       {/* --- BARRE DE FILTRES --- */}
       <div className="bg-[#0F111A]/50 p-2 rounded-2xl border border-white/5 flex items-center gap-2 max-w-fit flex-wrap">
-        {/* BOUTON TOUTES AVEC MÉDAILLE BLEUE */}
         <button 
           onClick={() => onFilterChange('all')}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
@@ -99,24 +114,9 @@ const ModelListView = ({ brand, activeFilter, onModelSelect, onBack, session, on
           </span>
         </button>
 
-        <CategoryBtn 
-          active={activeFilter === 'recente'} 
-          onClick={() => onFilterChange('recente')}
-          color="text-orange-700" 
-          label="Récentes"
-        />
-        <CategoryBtn 
-          active={activeFilter === 'youngtimer'} 
-          onClick={() => onFilterChange('youngtimer')}
-          color="text-slate-300" 
-          label="Youngtimer"
-        />
-        <CategoryBtn 
-          active={activeFilter === 'collection'} 
-          onClick={() => onFilterChange('collection')}
-          color="text-amber-400" 
-          label="Collection"
-        />
+        <CategoryBtn active={activeFilter === 'recente'} onClick={() => onFilterChange('recente')} color="text-orange-700" label="Récentes" />
+        <CategoryBtn active={activeFilter === 'youngtimer'} onClick={() => onFilterChange('youngtimer')} color="text-slate-300" label="Youngtimer" />
+        <CategoryBtn active={activeFilter === 'collection'} onClick={() => onFilterChange('collection')} color="text-amber-400" label="Collection" />
       </div>
 
       {loading ? (
@@ -129,7 +129,6 @@ const ModelListView = ({ brand, activeFilter, onModelSelect, onBack, session, on
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredModels.map((model) => {
             const badge = getBadgeConfig(model.year_start);
-            
             return (
               <div
                 key={model.id}
