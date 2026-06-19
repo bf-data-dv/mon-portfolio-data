@@ -2,22 +2,23 @@ import os
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
+
 # ==============================================================================
-# CONFIGURATION, ENVIRONNEMENT & INITIALISATION (SCOPE GLOBAL)
+# CONFIGURATION SUPABASE (ADMINISTRATEUR)
 # ==============================================================================
-# Chargement des variables d'environnement locales stockées dans le fichier .dotenv
+
 load_dotenv()
 
-# Double gestion de fallback pour assurer la compatibilité des clés (variables Node/React vs Backend Python)
 SUPABASE_URL = os.getenv("SUPABASE_URL") or os.getenv("REACT_APP_SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY") or os.getenv("REACT_APP_SUPABASE_ANON_KEY")
+# On utilise ici la clé service_role pour avoir les droits d'écriture/suppression globaux
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
-# Sécurité : On lève immédiatement une exception pour bloquer le script si les variables d'accès sont absentes
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("Erreur critique : Identifiants Supabase introuvables. Vérifiez le fichier .env.")
+# Vérification de sécurité
+if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+    raise ValueError("Erreur critique : SUPABASE_URL ou SUPABASE_SERVICE_KEY introuvables. Vérifiez votre fichier .env.")
 
-# Initialisation du client de connexion Supabase (PostgREST wrapper)
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Initialisation du client avec la clé d'administration
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 # Constante métier : Volume arbitraire injecté pour l'initialisation des stocks disponibles
 STOCK_INITIAL = 10
